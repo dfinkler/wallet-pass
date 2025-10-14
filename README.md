@@ -344,22 +344,33 @@ public class PhoneVerificationService
 
 ### Entity Relationship Diagram
 
-**Note:** Demo schema shown. Production version will most likely link to external "artist" table on `artist_id`.
-
 ```mermaid
 erDiagram
+    ARTISTS ||--o{ PASS_TEMPLATES : "creates"
     PASS_TEMPLATES ||--o{ PASS_HOLDERS : "template"
     PASS_HOLDERS ||--o{ PHONE_VERIFICATIONS : "verifies"
     PASS_HOLDERS ||--o{ DEVICE_REGISTRATIONS : "installs on"
     PASS_HOLDERS ||--o{ NOTIFICATION_LOGS : "receives"
     
+    ARTISTS {
+        uuid id PK
+        varchar name "UNIQUE, NOT NULL"
+        varchar slug "UNIQUE, NOT NULL"
+        text bio "NULL"
+        jsonb social_links "NULL"
+        boolean is_active "DEFAULT true"
+        timestamp created_at "DEFAULT NOW()"
+        timestamp updated_at "DEFAULT NOW()"
+    }
+    
     PASS_TEMPLATES {
         uuid id PK
-        varchar artist_name "NOT NULL"
+        uuid artist_id FK "NOT NULL"
         varchar tier_name "NOT NULL"
         text logo_url "NOT NULL"
         text background_url "NULL"
         jsonb custom_fields "NULL"
+        boolean is_deleted "DEFAULT false"
         timestamp created_at "DEFAULT NOW()"
         timestamp updated_at "DEFAULT NOW()"
     }
@@ -413,18 +424,17 @@ erDiagram
 
 ### Table Specifications
 
-#### 1. pass_templates
-**Purpose:** Artist/event pass configurations (template approach for reusability)
+#### 1. artists
+**Purpose:** Artist/performer master data
 
 ```sql
--- Example artists table
 CREATE TABLE artists (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL UNIQUE,
     slug VARCHAR(255) NOT NULL UNIQUE,  -- URL-friendly: "voila"
     bio TEXT,
     website_url TEXT,
-    social_links JSONB,
+    social_links JSONB,  -- {"instagram": "@voilamusic", "spotify": "spotify:artist:abc123"}
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -432,15 +442,29 @@ CREATE TABLE artists (
 
 CREATE INDEX idx_artists_slug ON artists(slug);
 CREATE INDEX idx_artists_active ON artists(is_active) WHERE is_active = TRUE;
+```
 
--- Templates reference artists by ID
+**Design Notes:**
+- **Normalization:** Single source of truth for artist data (update name once, applies everywhere)
+- **Slug:** URL-friendly identifier for web routes (`/artists/voila`)
+- **Social links:** JSONB for flexible platform support
+- **Is Active:** Soft deactivation (hide from public, keep historical data)
+
+**Demo Note:** Current prototype uses denormalized `artist_name` in `pass_templates` for simplicity. Production implementation should use this normalized approach.
+
+---
+
+#### 2. pass_templates
+**Purpose:** Pass configurations per artist/tier (template approach for reusability)
+
+```sql
 CREATE TABLE pass_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    artist_id UUID NOT NULL REFERENCES artists(id), 
-    tier_name VARCHAR(100) NOT NULL,
+    artist_id UUID NOT NULL REFERENCES artists(id),  -- FK to artists
+    tier_name VARCHAR(100) NOT NULL,  -- "Magician Pass", "VIP Pass", etc.
     logo_url TEXT NOT NULL,
     background_url TEXT,
-    custom_fields JSONB,
+    custom_fields JSONB,  -- Extensible metadata (see examples below)
     
     -- Soft delete support
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
@@ -539,7 +563,7 @@ WHERE (custom_fields->'notifications'->>'enabled')::boolean = true;
 
 ---
 
-#### 2. pass_holders
+#### 3. pass_holders
 **Purpose:** Individual fan passes with encrypted PII
 
 ```sql
@@ -816,7 +840,7 @@ public async Task<byte[]> EncryptPII(string plaintext, string keyId)
 
 ---
 
-#### 3. phone_verifications
+#### 4. phone_verifications
 **Purpose:** Temporary verification code storage (alternative: Redis)
 
 ```sql
@@ -850,7 +874,7 @@ CREATE INDEX idx_verifications_expires
 
 ---
 
-#### 4. device_registrations
+#### 5. device_registrations
 **Purpose:** Track wallet installations across devices
 
 ```sql
@@ -912,7 +936,7 @@ CREATE INDEX idx_devices_last_seen
 
 ---
 
-#### 5. notification_logs
+#### 6. notification_logs
 **Purpose:** Audit trail for push notifications (CMMI5 requirement)
 
 ```sql
