@@ -3,13 +3,10 @@
 > **Author:** Daniel Finkler  
 > **Date:** October 2025  
 > **Stack:** .NET 9.0 API + Next.js 15 TypeScript  
-> **Go-Live:** December 15, 2025
 
 ## Overview
 
 A mobile wallet pass system enabling direct push notifications to fans without app installation. Demonstrates production-ready architecture with platform abstraction (Apple Wallet + Google Wallet), phone verification flow, and smart User-Agent detection.
-
-**Demo:** http://localhost:3000 | **API Docs:** http://localhost:5076/scalar/v1
 
 ---
 
