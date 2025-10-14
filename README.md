@@ -139,7 +139,7 @@ POST /api/pass/initiate
 
 **Demo Mode:** Code logged to console: `Code: 453018`
 
-### Example: Split Verification
+### Example: Phone Verification + Complete User Association
 
 **Step 1 - Verify Code Only:**
 ```json
@@ -307,10 +307,6 @@ public class PhoneVerificationService
 
 ### Data Protection Strategy
 
-**Demo (In-Memory):**
-- `ConcurrentDictionary` for passes and verification codes
-- Suitable for prototype demonstration
-
 **Production Recommendations:**
 - **Database:** PostgreSQL with encrypted PII columns (AES-256)
 - **Cache:** Redis for verification codes with TTL
@@ -417,35 +413,7 @@ erDiagram
 **Purpose:** Artist/event pass configurations (template approach for reusability)
 
 ```sql
-CREATE TABLE pass_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    artist_name VARCHAR(255) NOT NULL,  -- denormalized for simplicity
-    tier_name VARCHAR(100) NOT NULL,
-    logo_url TEXT NOT NULL,
-    background_url TEXT,
-    custom_fields JSONB,
-    
-    -- Soft delete support
-    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    deleted_at TIMESTAMP,
-    deleted_by VARCHAR(100),
-    
-    -- Audit trail
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_by VARCHAR(100),
-    
-    CONSTRAINT unique_artist_tier UNIQUE (artist_name, tier_name)
-);
-
-CREATE INDEX idx_pass_templates_artist 
-    ON pass_templates(artist_name) 
-    WHERE is_deleted = FALSE;
-```
-
-**Production Schema (Normalized with Artists Table):**
-```sql
--- Separate artists table
+-- Example artists table
 CREATE TABLE artists (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -464,7 +432,7 @@ CREATE INDEX idx_artists_active ON artists(is_active) WHERE is_active = TRUE;
 -- Templates reference artists by ID
 CREATE TABLE pass_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    artist_id UUID NOT NULL REFERENCES artists(id),  -- FK instead of name
+    artist_id UUID NOT NULL REFERENCES artists(id), 
     tier_name VARCHAR(100) NOT NULL,
     logo_url TEXT NOT NULL,
     background_url TEXT,
@@ -496,13 +464,6 @@ CREATE INDEX idx_pass_templates_custom_fields
 ```
 
 **Design Notes:**
-- **Demo vs Production:** 
-  - Demo denormalizes `artist_name` for simplicity (no JOINs needed)
-  - Production normalizes with separate `artists` table for:
-    - ✅ Artist data consistency (update name once, applies to all templates)
-    - ✅ Artist-level analytics ("How many templates per artist?")
-    - ✅ Rich artist profiles (bio, social links, etc.)
-    - ✅ Artist management (activate/deactivate all templates at once)
 - **Soft deletes:** Preserve historical templates for audit/reporting while hiding from active queries
 - **Why soft delete?** 
   - Existing pass_holders still reference old templates (foreign key integrity)
@@ -1100,48 +1061,24 @@ yarn test
 ## Project Structure
 
 ```
-fanpad-wallet-pass/
-├── FanPad.WalletPass/              # .NET 9.0 Minimal API
-│   ├── Program.cs                  # API endpoints (8 endpoints)
-│   ├── Models/
-│   │   ├── PassData.cs            # Domain models
-│   │   ├── Requests.cs            # DTOs (Initiate, Verify, Complete)
-│   │   ├── Responses.cs           # Response contracts
-│   │   ├── Result.cs              # Functional error handling
-│   │   └── Platform.cs            # Platform enum
-│   └── Services/
-│       ├── WalletPassBase.cs      # Abstract platform service
-│       ├── AppleWalletService.cs  # iOS implementation
-│       ├── GoogleWalletService.cs # Android implementation
-│       ├── UserAgentService.cs    # Smart platform detection
-│       ├── PhoneVerificationService.cs
-│       └── PassRepository.cs      # In-memory data store
-│
-├── FanPad.WalletPass.Tests/       # xUnit + Moq + FluentAssertions
-│   └── Services/
-│       └── UserAgentServiceTests.cs
-│
-├── fanpad-wallet-ui/               # Next.js 15 TypeScript
-│   ├── app/
-│   │   ├── page.tsx               # Main orchestrator
-│   │   └── layout.tsx
-│   ├── components/                # Step-based UI
-│   │   ├── PhoneStep.tsx          # Phone + country code
-│   │   ├── VerifyStep.tsx         # 6-digit code input
-│   │   ├── CompleteStep.tsx       # Full-screen name entry
-│   │   ├── DoneStep.tsx           # Download buttons
-│   │   └── PassCard.tsx           # VOILÀ pass preview
-│   └── lib/
-│       └── api.ts                 # Type-safe API client
-│
-├── docs/                           # Documentation
-│   ├── DevTask.md                 # Interview requirements
-│   ├── FLOW-ANALYSIS.md           # Figma alignment
-│   └── IMPLEMENTATION-SUMMARY.md
-│
-├── package.json                    # Concurrently orchestration
-├── STARTUP.md                      # Quick reference
-└── README.md                       # This file
+FanPad.WalletPass/          .NET 9.0 API (8 endpoints)
+  - Program.cs              API endpoints & configuration
+  - Models/                 Domain models & DTOs
+  - Services/               Business logic & platform abstraction
+
+FanPad.WalletPass.Tests/    Unit tests (24 tests)
+  - UserAgentServiceTests.cs
+
+fanpad-wallet-ui/           Next.js TypeScript frontend
+  - app/page.tsx            Main UI orchestration
+  - components/             PhoneStep, VerifyStep, CompleteStep, DoneStep
+  - lib/api.ts              Type-safe API client
+
+docs/                       Documentation
+  - DevTask.md              Interview requirements
+
+package.json                Run both API + UI with "yarn dev"
+README.md                   This file
 ```
 
 ---
@@ -1150,8 +1087,8 @@ fanpad-wallet-pass/
 
 ### Technology Choices
 
-- **Framework:** Next.js 15 (App Router + Turbopack)
-- **Language:** TypeScript (no semicolons, Prettier)
+- **Framework:** React + Next.js 15 (App Router)
+- **Language:** TypeScript
 - **Styling:** Tailwind CSS 4
 - **Icons:** Lucide React
 - **Package Manager:** Yarn 4 with node_modules
@@ -1163,11 +1100,6 @@ fanpad-wallet-pass/
 - Step components - Isolated UI concerns
 - `api.ts` - Type-safe backend communication
 
-**Key Features:**
-- Phone number auto-formatting (`XXX-XXX-XXXX`)
-- Full-screen "Complete Account" takeover
-- Form reset on back navigation
-- Responsive error handling
 
 ---
 
@@ -1188,58 +1120,29 @@ fanpad-wallet-pass/
 
 ## Key Design Decisions
 
-### 1. Split Verification Flow
-**Decision:** Separate code verification from name entry  
-**Rationale:** Immediate feedback on code validity, better UX, clearer error states
-
-### 2. Backend Platform Detection
+### Backend Platform Detection
 **Decision:** Hybrid User-Agent analysis with explicit override  
 **Rationale:** Self-contained service, no frontend dependency, flexible override
 
-### 3. Abstract Platform Layer
+### Abstract Platform Layer
 **Decision:** `WalletPassBase` with Apple/Google implementations  
 **Rationale:** Isolate platform complexity, enable parallel development, future extensibility
 
-### 4. In-Memory Demo Storage
-**Decision:** `ConcurrentDictionary` instead of database  
-**Rationale:** Rapid prototyping, no infrastructure setup, easy demonstration
-
-### 5. Minimal API Pattern
+### Minimal API Pattern
 **Decision:** Minimal APIs over Controllers  
 **Rationale:** Functional style, less boilerplate, better for microservices
 
----
-
-## Production Readiness Checklist
-
-### Required for Production
-
-- [ ] **Apple Developer Account** - P12 certificate, Pass Type ID, APNs key
-- [ ] **Google Wallet Account** - Service account JSON, Issuer ID
-- [ ] **PostgreSQL Database** - Encrypted PII columns, indexes
-- [ ] **Redis Cache** - Verification code TTL management
-- [ ] **SMS Provider** - Twilio or AWS SNS integration
-- [ ] **Secrets Management** - AWS Secrets Manager or HashiCorp Vault
-- [ ] **Rate Limiting** - API gateway or middleware
-- [ ] **Input Validation** - FluentValidation library
-- [ ] **Structured Logging** - Serilog with ELK/DataDog
-- [ ] **Error Monitoring** - Sentry or Application Insights
-- [ ] **Load Testing** - JMeter or k6
-- [ ] **Security Audit** - CMMI5 compliance review
-- [ ] **Device Testing** - Physical iPhone and Android devices
+### Frontend Client Platform
+**Decision:** Typescript + NextJS + React + Tailwind 
+**Rationale:** Type safety, component architecture, industry standard
 
 ---
-
-## Additional Resources
-
-### API Documentation
-- **Interactive Docs:** http://localhost:5076/scalar/v1
-- **OpenAPI Spec:** http://localhost:5076/openapi/v1.json
 
 ### Official Platform Docs
+- [.NET 9.0 Minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis)
 - [Apple Wallet Developer Guide](https://developer.apple.com/documentation/walletpasses)
 - [Google Wallet API](https://developers.google.com/wallet)
-- [.NET 9.0 Minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis)
+
 
 ---
 
@@ -1247,8 +1150,6 @@ fanpad-wallet-pass/
 
 **Daniel Finkler**  
 Full-Stack Engineer | TypeScript • React • .NET  
-[GitHub](https://github.com/danielfinkler) | [LinkedIn](https://linkedin.com/in/danielfinkler)
+[GitHub](https://github.com/dfinkler) | [LinkedIn](https://www.linkedin.com/in/daniel-finkler-49b0934/)
 
----
 
-*Technical demonstration for Program Ocean - CMMI5 compliance considered*
