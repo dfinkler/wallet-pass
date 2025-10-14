@@ -1,0 +1,36 @@
+{
+  "name": "fanpad-wallet-pass",
+  "version": "1.0.0",
+  "description": "FanPad Wallet Pass - Mobile Wallet Integration (Apple + Google Wallet)",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --names \"API,UI\" --prefix-colors \"green.bold,cyan.bold\" \"npm run dev:api\" \"npm run dev:ui\"",
+    "dev:api": "cd FanPad.WalletPass && dotnet run",
+    "dev:ui": "cd fanpad-wallet-ui && yarn dev",
+    "build": "npm run build:api && npm run build:ui",
+    "build:api": "cd FanPad.WalletPass && dotnet build",
+    "build:ui": "cd fanpad-wallet-ui && yarn build",
+    "test": "npm run test:api",
+    "test:api": "cd FanPad.WalletPass.Tests && dotnet test --nologo",
+    "clean": "npm run clean:api && npm run clean:ui",
+    "clean:api": "cd FanPad.WalletPass && dotnet clean",
+    "clean:ui": "cd fanpad-wallet-ui && rm -rf .next node_modules",
+    "install:ui": "cd fanpad-wallet-ui && yarn install"
+  },
+  "devDependencies": {
+    "concurrently": "9.2.1"
+  },
+  "keywords": [
+    "wallet",
+    "apple-wallet",
+    "google-wallet",
+    "mobile",
+    "notifications",
+    "dotnet",
+    "nextjs",
+    "typescript"
+  ],
+  "author": "Daniel Finkler",
+  "license": "MIT",
+  "packageManager": "yarn@4.9.2+sha512.1fc009bc09d13cfd0e19efa44cbfc2b9cf6ca61482725eb35bbc5e257e093ebf4130db6dfe15d604ff4b79efd8e1e8e99b25fa7d0a6197c9f9826358d4d65c3c"
+}
