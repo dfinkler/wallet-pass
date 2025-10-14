@@ -15,12 +15,16 @@ A mobile wallet pass system enabling direct push notifications to fans without a
 
 ## Quick Start
 
+**Prerequisites:**
+- .NET 9.0 SDK ([download](https://dotnet.microsoft.com/download))
+- Node.js 20+ with Yarn 4
+
 ```bash
 # Install dependencies
-yarn install
-cd fanpad-wallet-ui && yarn install && cd ..
+yarn install              # Root: installs concurrently
+cd fanpad-wallet-ui && yarn install && cd ..  # Frontend dependencies
 
-# Start both API + UI
+# Start both API + UI (NuGet packages auto-restore on first run)
 yarn dev
 ```
 
